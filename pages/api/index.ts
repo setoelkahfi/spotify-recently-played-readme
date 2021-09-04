@@ -43,6 +43,23 @@ export default async (req: NextApiRequest, res: NextApiResponse): Promise<void> 
         return;
     }
 
+    function parseBoolean(value: string) {
+        switch (value) {
+            case 'true':
+            case '1':
+            case 'on':
+            case 'yes':
+                return true;
+            default:
+                return false;
+        }
+    }
+    const uniqueTrackQuery: string | string[] | undefined = req.query['unique'];
+    let uniqueTrack = Constants.defaultUniqueTrack;
+    if (typeof uniqueTrackQuery === 'string') {
+        uniqueTrack = parseBoolean(uniqueTrackQuery);
+    }
+
     try {
         // Retrieve access tokens from Firebase
         const tokens = await getTokensFromFirebase(user);
@@ -71,11 +88,19 @@ export default async (req: NextApiRequest, res: NextApiResponse): Promise<void> 
 
         // Get recently played tracks
         const username = await getUsername(tokens.accessToken);
-        const recentlyPlayed = await getRecentlyPlayed(count, tokens.accessToken);
+        const limit = uniqueTrack ? Constants.defaultUniqueTrackSearchLimit : count
+        let recentlyPlayedItems = await getRecentlyPlayed(limit, tokens.accessToken);
+
+        if (uniqueTrack) {
+            // Remove duplicate tracks...
+            recentlyPlayedItems = recentlyPlayedItems.filter((v, i, a) => a.findIndex((t) => t.track.id === v.track.id) === i);
+            // ... then only return the number of items that are requested.
+            recentlyPlayedItems.slice(0, count);
+        }
 
         // Set base64-encoded cover art images by routing through /api/proxy endpoint
         // This is needed because GitHub's Content Security Policy prohibits external images (inline allowed)
-        for (const { track } of recentlyPlayed.items) {
+        for (const { track } of recentlyPlayedItems) {
             try {
                 // Image at index 2 *should be* the smallest image size
                 const smallImg = track?.album.images[2].url;
@@ -97,7 +122,7 @@ export default async (req: NextApiRequest, res: NextApiResponse): Promise<void> 
         res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
         res.setHeader('Content-Type', 'image/svg+xml');
         res.statusCode = 200;
-        res.send(generateSvg(recentlyPlayed, username, width));
+        res.send(generateSvg(recentlyPlayedItems, username, width));
     } catch (e) {
         const data = e?.response?.data;
         res.statusCode = 400;

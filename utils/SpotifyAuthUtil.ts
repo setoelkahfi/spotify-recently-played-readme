@@ -1,5 +1,6 @@
 import axios from 'axios';
 import qs from 'qs';
+import { PlayHistory } from '../models/PlayHistory';
 import { RecentlyPlayedResponse } from '../models/RecentlyPlayedResponse';
 import { SpotifyAuthResponse } from '../models/SpotifyAuthResponse';
 import { SpotifyRefreshResponse } from '../models/SpotifyRefreshResponse';
@@ -51,17 +52,17 @@ export async function getUsername(accessToken: string): Promise<string> {
     return result.data.id;
 }
 
-export async function getRecentlyPlayed(count: number, accessToken: string): Promise<RecentlyPlayedResponse> {
+export async function getRecentlyPlayed(limit: number, accessToken: string): Promise<PlayHistory[]> {
     const result = await axios.get<RecentlyPlayedResponse>('https://api.spotify.com/v1/me/player/recently-played', {
         params: {
-            limit: count,
+            limit: limit,
         },
         headers: {
             Authorization: `Bearer ${accessToken}`,
         },
     });
-
-    return result.data;
+    
+    return result.data.items;
 }
 
 export async function isValidToken(accessToken: string): Promise<boolean> {
